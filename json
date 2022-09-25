@@ -1,0 +1,170 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "WorfType": {
+            "type": "string",
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_ZRS",
+                "Standard_GRS",
+                "Standard_RAGRS",
+                "Premium_LRS"
+            ]
+        },
+        "WorfName": {
+            "type": "string",
+            "minLength": 1
+        },
+        "WorfAdminUserName": {
+            "type": "string",
+            "minLength": 1
+        },
+        "WorfAdminPassword": {
+            "type": "securestring"
+        },
+        "WorfUbuntuOSVersion": {
+            "type": "string",
+            "defaultValue": "14.04.2-LTS",
+            "allowedValues": [
+                "12.04.5-LTS",
+                "14.04.2-LTS",
+                "15.04"
+            ]
+        }
+    },
+    "resources": [
+        {
+            "name": "[variables('WorfName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "Worf"
+            },
+            "properties": {
+                "accountType": "[parameters('WorfType')]"
+            }
+        },
+        {
+            "name": "Worf",
+            "type": "Microsoft.Network/virtualNetworks",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "Worf"
+            },
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('WorfPrefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('WorfSubnet1Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('WorfSubnet1Prefix')]"
+                        }
+                    },
+                    {
+                        "name": "[variables('WorfSubnet2Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('WorfSubnet2Prefix')]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[variables('WorfNicName')]",
+            "type": "Microsoft.Network/networkInterfaces",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks/', 'Worf')]"
+            ],
+            "tags": {
+                "displayName": "WorfNic"
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('WorfSubnetRef')]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[parameters('WorfName')]",
+            "type": "Microsoft.Compute/virtualMachines",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('WorfName'))]",
+                "[concat('Microsoft.Network/networkInterfaces/', variables('WorfNicName'))]"
+            ],
+            "tags": {
+                "displayName": "Worf"
+            },
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('WorfVmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('WorfName')]",
+                    "adminUsername": "[parameters('WorfAdminUsername')]",
+                    "adminPassword": "[parameters('WorfAdminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('WorfImagePublisher')]",
+                        "offer": "[variables('WorfImageOffer')]",
+                        "sku": "[parameters('WorfUbuntuOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "WorfOSDisk",
+                        "vhd": {
+                            "uri": "[concat('http://', variables('WorfName'), '.blob.core.windows.net/', variables('WorfStorageAccountContainerName'), '/', variables('WorfOSDiskName'), '.vhd')]"
+                        },
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('WorfNicName'))]"
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "variables": {
+        "WorfName": "[concat('Worf', uniqueString(resourceGroup().id))]",
+        "WorfPrefix": "10.0.0.0/16",
+        "WorfSubnet1Name": "Subnet-1",
+        "WorfSubnet1Prefix": "10.0.0.0/24",
+        "WorfSubnet2Name": "Subnet-2",
+        "WorfSubnet2Prefix": "10.0.1.0/24",
+        "WorfImagePublisher": "Canonical",
+        "WorfImageOffer": "UbuntuServer",
+        "WorfOSDiskName": "WorfOSDisk",
+        "WorfVmSize": "Standard_B1ls",
+        "WorfVnetID": "[resourceId('Microsoft.Network/virtualNetworks', 'Worf')]",
+        "WorfSubnetRef": "[concat(variables('WorfVnetID'), '/subnets/', variables('WorfSubnet1Name'))]",
+        "WorfStorageAccountContainerName": "vhds",
+        "WorfNicName": "[concat(parameters('WorfName'), 'NetworkInterface')]"
+    }
+}
